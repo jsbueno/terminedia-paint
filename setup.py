@@ -2,13 +2,13 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="terminedia",
+    name="terminedia_paint",
     packages=find_packages(),
-    version="0.4.0.dev0",
+    version="0.1.0.dev0",
     license="LGPLv3+",
     author="João S. O. Bueno",
     author_email="gwidion@gmail.com",
-    description="Applicative to draw images interactively on the posix terminal"
+    description="Applicative to draw images interactively on the posix terminal",
     keywords="terminal cmd posix xterm ANSI color",
     url="https://github.com/jsbueno/terminedia-paint",
     project_urls={
@@ -20,7 +20,7 @@ setup(
     include_package_data=True,
     zip_safe=True,
     test_requires=[],
-    install_requires=["terminedia @ git+https://github.com/jsbueno/terminedia.git",]  # temporarily pointing to master
+    install_requires=["terminedia @ git+https://github.com/jsbueno/terminedia.git",],  # temporarily pointing to master
     extras_require={
         "images": ["pillow>=6.0.0"],
         "tests": ["pytest"],
