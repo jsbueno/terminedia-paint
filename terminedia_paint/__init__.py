@@ -96,12 +96,29 @@ class Painter():
             self.active_tool.set_point(event.pos)
         self.pos = event.pos
 
-    def save(self):
+    def save(self, event=None):
         pass
 
-    def pick_color(self):
-        pass
+    def pick_color(self, event=None):
+        colors = {
+            "default": TM.DEFAULT_FG,
+            "white":  TM.Color("white"),
+            "red":  TM.Color("red"),
+            "green":  TM.Color("green"),
+            "blue":  TM.Color("blue"),
+            "orange":  TM.Color((255,192,0)),
+            "yellow":  TM.Color("yellow"),
+            "black":  TM.Color("black"),
+        }
 
-if __name__ == "__main__":
+        def _pick_color(selector):
+            self.sc.context.foreground = selector.value
+            selector.kill()
+        color_widget = TM.widgets.Selector(self.sc, colors, pos=(0,0), select=_pick_color, border=True)
+
+def run():
     painter = Painter()
     painter.run()
+
+if __name__ == "__main__":
+    run()
