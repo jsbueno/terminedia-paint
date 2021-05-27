@@ -51,6 +51,7 @@ class Painter():
             "s": self.save,
             "c": self.pick_color,
             "l": self.pick_character,
+            "i": self.insert_image,
             "e": (lambda e: setattr(self, "active_tool", self.tools["erase"])),
             "p": (lambda e: setattr(self, "active_tool", self.tools["paint"])),
         }
@@ -116,38 +117,62 @@ class Painter():
             self.active_tool.set_point(event.pos)
         self.pos = event.pos
 
-    async def save(self, event=None):
-        img = TM.shape(self.sc.size)
+    async def _input(self, label, pos=(0,3), default="", width=30):
 
-        def _pick_file_name(entry):
-            nonlocal file_name_picked
+        text = default
+        text_picked = False
+        def _pick_text(entry):
+            nonlocal text_picked, text
             if not entry.value:
                 return
+            text = entry.value
             self.file_name = entry.value
 
-            file_name_picked = True
-            fn_widget.kill()
-            label.kill()
+            text_picked = True
+            widget.kill()
+            label_w.kill()
 
-        file_name = getattr(self, "file_name", "")
+        def _cancel(entry):
+            nonlocal text_picked, text
+            text = ""
+            text_picked = True
+            widget.kill()
+            label_w.kill()
 
-        label = TM.widgets.Label(self.sc, pos=(0, 3), text="Filename:")
-        fn_widget = TM.widgets.Entry(self.sc, pos=(11, 3), width=30, enter_callback=_pick_file_name)
-        file_name_picked = False
+        label_w = TM.widgets.Label(self.sc, pos=pos, text=label)
+        widget = TM.widgets.Entry(self.sc, value=text, pos=V2(pos) + (len(label) + 1, 0), width=width, enter_callback=_pick_text, esc_callback=_cancel)
 
-
-        while not file_name_picked:
+        while not text_picked:
             await asyncio.sleep(0.1)
 
+        return text
+
+    async def insert_image(self, event=None):
+        pass
+
+    async def save(self, event=None):
+        img = TM.shape(self.sc.size)
+        file_name = getattr(self, "file_name", "")
+        new_file_name = await self._input("Save file name:", default=file_name)
+        if not new_file_name:
+            await self._message("Saving canceled")
+            return
+
+        self.file_name = new_file_name
 
         active_sprites = {sprite: sprite.active for sprite in self.sc.sprites}
         for sprite in self.sc.sprites:
             sprite.active = False
         img.draw.blit((0, 0), self.sc.shape)
+        asyncio.create_task(self._message(f"SAVING {self.file_name!r}"))
+        await asyncio.sleep(0)
         for sprite in self.sc.sprites:
-            sprite.active = active_sprites[sprite]
-        msg = TM.widgets.Label(self.sc, text=f"SAVING {self.file_name!r}", padding=2, border=True, pos=(self.sc.size.x//2,3))
+            if sprite in active_sprites:
+                sprite.active = active_sprites[sprite]
         img.render(output=self.file_name, backend=("ANSI" if self.file_name.lower()[-4:] != "html" else "HTML"))
+
+    async def _message(self, text):
+        msg = TM.widgets.Label(self.sc, text=text, padding=2, border=True, pos=(self.sc.size.x // 2 - len(text) // 2 - 1,3))
         await asyncio.sleep(2)
         msg.kill()
 
