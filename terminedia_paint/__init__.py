@@ -52,7 +52,9 @@ class Painter():
 
     def tool_setup(self):
         self.global_shortcuts = {
-            "q": (self.quit, "Quit"),
+            "<space>": (None, "Paint pixel"),
+            "←↑→↓": (None, "Move cursor"),
+            "x": (None, "Toggle drawing"),
             "s": (self.save, "Save"),
             "c": (self.pick_color, "Pick Color"),
             "l": (self.pick_character, "Pick Char"),
@@ -60,9 +62,12 @@ class Painter():
             "e": ((lambda e: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
             "p": ((lambda e: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
             "h": (self.toggle_help, "Toggle help"),
+            "q": (self.quit, "Quit"),
         }
 
         for shortcut, (method, doc) in self.global_shortcuts.items():
+            if method is None:
+                continue
             if len(shortcut) > 1:
                 shortcut = getattr(TM.input.KeyCodes, shortcut)
             TM.events.Subscription(TM.events.KeyPress, method, guard=(lambda s: lambda event: event.key == s)(shortcut))
@@ -340,7 +345,7 @@ class Painter():
                     current_col += 1
                     current_row = 0
 
-            self.help_sprite = TM.Sprite(sh)
+            self.help_sprite = TM.Sprite(sh, alpha=False)
         if not self.help_active:
             self.help_sprite.pos = (0, self.sc.size.y - self.help_sprite.rect.height)
             self.sc.sprites.add(self.help_sprite)
