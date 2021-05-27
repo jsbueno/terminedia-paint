@@ -235,13 +235,25 @@ class Painter():
 
         label = None
         selector = None
+        extended_selector = None
+
+        def _pick_extended(entry):
+            self.sc.context.char = entry.value
+            extended_selector.kill()
+
 
         def _search_text(entry):
+            nonlocal extended_selector
             options = TM.unicode.lookup(entry.value)
             if len(options) == 1:
                 self.sc.context.char = options[0]
             elif options:
-                pass
+                options = {f"{str(option)} - {option.name[0:20]}": str(option) for option in options}
+                extended_selector = TM.widgets.Selector(self.sc, options, pos=(0,0), select=_pick_extended, border=True)
+                entry.kill()
+                label.kill()
+                selector.kill()
+
             else:
                 pass
             entry.kill()
