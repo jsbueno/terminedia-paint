@@ -19,11 +19,6 @@ I apologize for the UI elements mixed with logic  - as terminedia widget and
 event system evolves, we shuld get better abstractions and separation.
 """
 
-
-class ProgramEnd(Exception):
-    pass
-
-
 class SimplePaintTool:
     def __init__(self, screen):
         self.sc = screen
@@ -78,6 +73,7 @@ class Painter():
         }
 
     def state_reset(self):
+        self.dirty = False
         self.active_tool = self.tools["paint"]
         self.continous_painting = False
         self.help_active = False
@@ -89,10 +85,9 @@ class Painter():
             self.event_setup()
             self.state_reset()
 
-            try:
-                asyncio.run(TM.terminedia_main(screen=self.sc))
-            except ProgramEnd:
-                self.sc.commands.moveto(self.sc.size)
+            asyncio.run(TM.terminedia_main(screen=self.sc))
+            # reached when a QuitLoop event is dispatched
+            self.sc.commands.moveto(self.sc.size)
 
 
     def key_dispatcher(self, event):
@@ -119,18 +114,25 @@ class Painter():
 
         if self.continous_painting:
             self.active_tool.set_point(self.pos)
+            self.dirty = True
 
-    def quit(self, event=None):
-        raise ProgramEnd()
+    async def quit(self, event=None):
+        if self.dirty:
+            confirm = await self._input("Confirm quit without save? (y/N)", width=3)
+            if confirm.lower() != "y":
+                return
+        TM.events.Event(TM.events.QuitLoop)
 
     def mouse_click(self, event):
         self.active_tool.set_point(event.pos)
         self.pos = event.pos
+        self.dirty = True
 
     def mouse_move(self, event):
         if event.buttons:
             self.active_tool.set_point(event.pos)
         self.pos = event.pos
+        self.dirty = True
 
     async def _input(self, label, pos=(0,3), default="", width=30):
 
@@ -191,6 +193,7 @@ class Painter():
 
         img = TM.shape(img_path, size=(width, height), promote=True, resolution="square")
         self.sc.shape.draw.blit(self.pos, img)
+        self.dirty = True
 
 
     async def save(self, event=None):
@@ -213,6 +216,7 @@ class Painter():
             if sprite in active_sprites:
                 sprite.active = active_sprites[sprite]
         img.render(output=self.file_name, backend=("ANSI" if self.file_name.lower()[-4:] != "html" else "HTML"))
+        self.dirty = False
 
     async def _message(self, text):
         msg = TM.widgets.Label(self.sc, text=text, padding=2, border=True, pos=(self.sc.size.x // 2 - len(text) // 2 - 1,3))
