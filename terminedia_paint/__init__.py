@@ -1,14 +1,23 @@
 import asyncio
 import time
 from ast import literal_eval
+from math import ceil
 
 import sys, traceback
 
+from PIL import Image
 
 import terminedia as TM
 from terminedia import V2
 from terminedia.input import KeyCodes
+from terminedia.transformers.library import box_transformers
 
+"""
+Early version of paint-app for the terminal, using Terminedia.
+
+I apologize for the UI elements mixed with logic  - as terminedia widget and
+event system evolves, we shuld get better abstractions and separation.
+"""
 
 
 class ProgramEnd(Exception):
@@ -37,8 +46,9 @@ class Painter():
         self.pointer = TM.Sprite(TM.shape((1,1)))
         self.pos = V2(0,0)
         self.pointer.shape[0,0] = "*"
-        self.pointer.transformers.append(TM.Transformer(char=lambda char, tick: char if tick%2 else TM.TRANSPARENT))
+        self.pointer.transformers.append(TM.Transformer(char=lambda char, tick: char if (tick // 8) %2 else TM.TRANSPARENT))
         self.sc.shape.sprites.add(self.pointer)
+        TM.context.fps = 20
 
     def event_setup(self):
         TM.events.Subscription(TM.events.KeyPress, self.key_dispatcher)
@@ -46,17 +56,20 @@ class Painter():
         TM.events.Subscription(TM.events.MouseMove, self.mouse_move)
 
     def tool_setup(self):
-        global_shortcuts = {
-            "q": self.quit,
-            "s": self.save,
-            "c": self.pick_color,
-            "l": self.pick_character,
-            "i": self.insert_image,
-            "e": (lambda e: setattr(self, "active_tool", self.tools["erase"])),
-            "p": (lambda e: setattr(self, "active_tool", self.tools["paint"])),
+        self.global_shortcuts = {
+            "q": (self.quit, "Quit"),
+            "s": (self.save, "Save"),
+            "c": (self.pick_color, "Pick Color"),
+            "l": (self.pick_character, "Pick Char"),
+            "i": (self.insert_image, "Paste Image"),
+            "e": ((lambda e: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
+            "p": ((lambda e: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
+            "h": (self.toggle_help, "Toggle help"),
         }
 
-        for shortcut, method in global_shortcuts.items():
+        for shortcut, (method, doc) in self.global_shortcuts.items():
+            if len(shortcut) > 1:
+                shortcut = getattr(TM.input.KeyCodes, shortcut)
             TM.events.Subscription(TM.events.KeyPress, method, guard=(lambda s: lambda event: event.key == s)(shortcut))
 
         self.tools = {
@@ -67,6 +80,8 @@ class Painter():
     def state_reset(self):
         self.active_tool = self.tools["paint"]
         self.continous_painting = False
+        self.help_active = False
+        self.toggle_help()
 
     def run(self):
         with self.sc:
@@ -148,7 +163,35 @@ class Painter():
         return text
 
     async def insert_image(self, event=None):
-        pass
+
+        size=(100,50)
+        img_path = await self._input("Load image:")
+        if not img_path:
+            return
+
+        try:
+            img_meta = Image.open(img_path)
+        except OSError:
+            await self._message(f"Can't open file {img_path}")
+            return
+
+        x, y = self.sc.size
+        size_txt = await self._input("Paste width in char blocks ({x}):", width=4)
+        if not size_txt:
+            width = x
+        else:
+            try:
+                width = int(size_txt)
+            except ValueError:
+                await self._message(f"Invalid width {size_txt}")
+                return
+
+        proportion = width / img_meta.size[0]
+        height = int(img_meta.size[1] * proportion)
+
+        img = TM.shape(img_path, size=(width, height), promote=True, resolution="square")
+        self.sc.shape.draw.blit(self.pos, img)
+
 
     async def save(self, event=None):
         img = TM.shape(self.sc.size)
@@ -253,9 +296,6 @@ class Painter():
                 color_widget.kill()
             except Exception as err:
                 pass
-                # sys.stderr.write(f"{err}\n")
-                # sys.stderr.writelines("".join(traceback.format_tb(sys.last_traceback)))
-
 
         def _pick_color(selector):
             nonlocal color_label
@@ -266,6 +306,32 @@ class Painter():
                 self.sc.context.foreground = selector.value
                 selector.kill()
         color_widget = TM.widgets.Selector(self.sc, colors, pos=(0,0), select=_pick_color, border=True)
+
+    def toggle_help(self, event=None):
+        if not getattr(self, "help_sprite", None):
+            rows = ceil(len(self.global_shortcuts) // 3) + 1
+            sh = TM.shape((self.sc.size.x,  rows + 2))
+            sh.text[1].add_border(transform=box_transformers["DOUBLE"])
+            col_width = (sh.size.x - 2) // 3
+            current_row = 0
+            sh.context.foreground = TM.DEFAULT_FG
+            current_col = 0
+            actual_width = min(col_width, 25)
+            for shortcut, (callback, text) in self.global_shortcuts.items():
+                sh.text[1][current_col * col_width + 1, current_row] = f"[effects: bold|underline]{shortcut}[/effects]{text:>{actual_width - len(shortcut) - 3}s}"
+                current_row += 1
+                if current_row >= rows:
+                    current_col += 1
+                    current_row = 0
+
+            self.help_sprite = TM.Sprite(sh)
+        if not self.help_active:
+            self.help_sprite.pos = (0, self.sc.size.y - self.help_sprite.rect.height)
+            self.sc.sprites.add(self.help_sprite)
+            self.help_active = True
+        else:
+            self.help_sprite.kill()
+            self.help_active = False
 
     @property
     def pos(self):
