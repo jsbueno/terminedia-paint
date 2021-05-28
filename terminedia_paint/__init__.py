@@ -20,17 +20,27 @@ event system evolves, we shuld get better abstractions and separation.
 """
 
 class SimplePaintTool:
-    def __init__(self, screen):
-        self.sc = screen
+    erase = False
+    def __init__(self, drawable):
+        self.reset(drawable)
+
+    def reset(self, drawable):
+        self.drawable = drawable
+        self.last_set = None
 
     def set_point(self, pos):
-        self.sc.draw.set(pos)
+        if self.last_set:
+            self.drawable.line(pos, self.last_set, erase=self.erase)
+            self.last_set = None
+        elif not self.erase:
+            self.drawable.set(pos)
+        else:
+            self.drawable.set(pos)
+        # self.last_set = pos
 
 
 class SimpleEraseTool(SimplePaintTool):
-
-    def set_point(self, pos):
-        self.sc.draw.reset(pos)
+    erase = True
 
 
 class Painter():
@@ -55,6 +65,7 @@ class Painter():
             "<space>": (None, "Paint pixel"),
             "←↑→↓": (None, "Move cursor"),
             "x": (None, "Toggle drawing"),
+            "v": (None, "Line to last point"),
             "s": (self.save, "Save"),
             "c": (self.pick_color, "Pick Color"),
             "l": (self.pick_character, "Pick Char"),
@@ -73,13 +84,14 @@ class Painter():
             TM.events.Subscription(TM.events.KeyPress, method, guard=(lambda s: lambda event: event.key == s)(shortcut))
 
         self.tools = {
-            "paint": SimplePaintTool(self.sc),
-            "erase": SimpleEraseTool(self.sc)
+            "paint": SimplePaintTool(self.sc.shape.draw),
+            "erase": SimpleEraseTool(self.sc.shape.draw)
         }
 
     def state_reset(self):
         self.dirty = False
         self.active_tool = self.tools["paint"]
+        self.active_tool.reset(self.sc.draw)
         self.continous_painting = False
         self.help_active = False
         self.toggle_help()
@@ -114,11 +126,21 @@ class Painter():
             self.pos -= (0, 1)
         if key == " ":
             self.active_tool.set_point(self.pos)
+            self.active_tool.last_set = self.pos
+            self.dirty = True
+        if key == "v":
+            if getattr(self.active_tool, "one_to_last_click", False):
+                self.active_tool.last_set = self.active_tool.one_to_last_click
+                self.active_tool.one_to_last_click = None
+            self.active_tool.set_point(self.pos)
+            self.active_tool.last_set = self.pos
+            self.dirty = True
         if key == "x":
             self.continous_painting = ~self.continous_painting
 
         if self.continous_painting:
             self.active_tool.set_point(self.pos)
+            self.active_tool.last_set = self.pos
             self.dirty = True
 
     async def quit(self, event=None):
@@ -129,15 +151,20 @@ class Painter():
         TM.events.Event(TM.events.QuitLoop)
 
     def mouse_click(self, event):
+        #if not TM.inkey() == "v":
+        self.active_tool.one_to_last_click = self.active_tool.last_set
+        self.active_tool.last_set = None
         self.active_tool.set_point(event.pos)
+        self.active_tool.last_set = event.pos
         self.pos = event.pos
         self.dirty = True
 
     def mouse_move(self, event):
         if event.buttons:
             self.active_tool.set_point(event.pos)
+            self.active_tool.last_set = event.pos
+            self.dirty = True
         self.pos = event.pos
-        self.dirty = True
 
     async def _input(self, label, pos=(0,3), default="", width=30):
 
