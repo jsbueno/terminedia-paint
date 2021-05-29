@@ -20,7 +20,10 @@ setup(
     include_package_data=True,
     zip_safe=True,
     test_requires=[],
-    install_requires=["terminedia @ git+https://github.com/jsbueno/terminedia.git",],  # temporarily pointing to master
+    install_requires=[
+        "terminedia @ git+https://github.com/jsbueno/terminedia.git",  # temporarily pointing to main
+        "pillow>=6.0.0"
+    ],
     extras_require={
         "images": ["pillow>=6.0.0"],
         "tests": ["pytest"],
