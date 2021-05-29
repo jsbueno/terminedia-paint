@@ -176,7 +176,7 @@ class Painter():
 
         text = default
         text_picked = False
-        def _pick_text(entry):
+        def _pick_text(entry, event=None):
             nonlocal text_picked, text
             if not entry.value:
                 return
@@ -187,7 +187,7 @@ class Painter():
             widget.kill()
             label_w.kill()
 
-        def _cancel(entry):
+        def _cancel(entry, event=None):
             nonlocal text_picked, text
             text = ""
             text_picked = True
@@ -275,12 +275,12 @@ class Painter():
         selector = None
         extended_selector = None
 
-        def _pick_extended(entry):
+        def _pick_extended(entry, event=None):
             self.sc.context.char = entry.value
             extended_selector.kill()
 
 
-        def _search_text(entry):
+        def _search_text(entry, event=None):
             nonlocal extended_selector
             options = TM.unicode.lookup(entry.value)
             if len(options) == 1:
@@ -298,7 +298,7 @@ class Painter():
             label.kill()
             selector.kill()
 
-        def _type_text(entry):
+        def _type_text(entry, event=None):
             self.sc.context.char = entry.value[0]
             entry.kill()
             label.kill()
@@ -326,7 +326,8 @@ class Painter():
 
     async def pick_background(self, event=None):
         try:
-            self.sc.context.background = await self._pick_color(event)
+            color = await self._pick_color(event)
+            self.sc.context.background = color if color != TM.DEFAULT_FG else TM.DEFAULT_BG
         except TM.widgets.WidgetCancelled:
             pass
 
