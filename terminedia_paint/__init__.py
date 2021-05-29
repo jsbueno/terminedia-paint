@@ -19,6 +19,10 @@ I apologize for the UI elements mixed with logic  - as terminedia widget and
 event system evolves, we shuld get better abstractions and separation.
 """
 
+class CancelledException(Exception):
+    pass
+
+
 class SimplePaintTool:
     erase = False
     def __init__(self, drawable):
@@ -67,7 +71,8 @@ class Painter():
             "x": (None, "Toggle drawing"),
             "v": (None, "Line to last point"),
             "s": (self.save, "Save"),
-            "c": (self.pick_color, "Pick Color"),
+            "c": (self.pick_color, "Choose Color"),
+            "b": (self.pick_background, "Background Color"),
             "l": (self.pick_character, "Pick Char"),
             "i": (self.insert_image, "Paste Image"),
             "e": ((lambda e: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
@@ -137,6 +142,7 @@ class Painter():
             self.dirty = True
         if key == "x":
             self.continous_painting = ~self.continous_painting
+            self.active_tool.last_set = None
 
         if self.continous_painting:
             self.active_tool.set_point(self.pos)
@@ -260,7 +266,7 @@ class Painter():
             "█": "█",
             "*": "*",
             "#": "#",
-            "O": "O",
+            "⏶": "⏶",
             "type": "type",
             "search": "search"
         }
@@ -312,7 +318,19 @@ class Painter():
         selector = TM.widgets.Selector(self.sc, options, pos=(0,0), select=_pick_option, border=True)
 
 
-    def pick_color(self, event=None):
+    async def pick_color(self, event=None):
+        try:
+            self.sc.context.foreground = await self._pick_color(event)
+        except TM.widgets.WidgetCancelled:
+            pass
+
+    async def pick_background(self, event=None):
+        try:
+            self.sc.context.background = await self._pick_color(event)
+        except TM.widgets.WidgetCancelled:
+            pass
+
+    async def _pick_color(self, event=None):
         colors = {
             "default": TM.DEFAULT_FG,
             "white":  TM.Color("white"),
@@ -326,34 +344,26 @@ class Painter():
         }
         color_label = None
         color_widget = None
-        def _color_from_text(entry):
+
+        color_widget = TM.widgets.Selector(self.sc, colors, pos=(0,0), border=True, cancellable=True)
+        color = await color_widget
+        if color == "other":
             try:
-                color = None
+                color_label = TM.widgets.Label(self.sc, pos=(0,3), text="Color: ")
+                color_str = (await TM.widgets.Entry(self.sc, pos=(8, 3), width=15, cancellable=True)).strip()
                 try:
-                    color = TM.Color(literal_eval(entry.value.strip()))
+                    color = literal_eval(color_str)
                 except (ValueError, SyntaxError):
-                    try:
-                        color=TM.Color(entry.value.strip())
-                    except ValueError:
-                        pass
+                    pass
+                try:
+                    color = TM.Color(color_str)
+                except ValueError:
+                    raise TM.widgets.WidgetCancelled()
 
-                if color is not None:
-                    self.sc.context.foreground = color
-                entry.kill()
+            finally:
                 color_label.kill()
-                color_widget.kill()
-            except Exception as err:
-                pass
+        return color
 
-        def _pick_color(selector):
-            nonlocal color_label
-            if selector.value == "other":
-                color_label = TM.widgets.Label(self.sc, pos=(0,12), text="Color: ")
-                entry = TM.widgets.Entry(self.sc, pos=(8, 12), width=15, enter_callback=_color_from_text)
-            else:
-                self.sc.context.foreground = selector.value
-                selector.kill()
-        color_widget = TM.widgets.Selector(self.sc, colors, pos=(0,0), select=_pick_color, border=True)
 
     def toggle_help(self, event=None):
         if not getattr(self, "help_sprite", None):
