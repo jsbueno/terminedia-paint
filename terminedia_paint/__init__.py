@@ -175,30 +175,16 @@ class Painter():
     async def _input(self, label, pos=(0,3), default="", width=30):
 
         text = default
-        text_picked = False
-        def _pick_text(entry, event=None):
-            nonlocal text_picked, text
-            if not entry.value:
-                return
-            text = entry.value
-            self.file_name = entry.value
-
-            text_picked = True
-            widget.kill()
-            label_w.kill()
-
-        def _cancel(entry, event=None):
-            nonlocal text_picked, text
-            text = ""
-            text_picked = True
-            widget.kill()
-            label_w.kill()
 
         label_w = TM.widgets.Label(self.sc, pos=pos, text=label)
-        widget = TM.widgets.Entry(self.sc, value=text, pos=V2(pos) + (len(label) + 1, 0), width=width, enter_callback=_pick_text, esc_callback=_cancel)
 
-        while not text_picked:
-            await asyncio.sleep(0.1)
+        widget = TM.widgets.Entry(self.sc, value=text, pos=V2(pos) + (len(label) + 1, 0), width=width, cancellable=True)
+        try:
+            text = await widget
+        except TM.widgets.WidgetCancelled:
+            text = ""
+        finally:
+            label_w.kill()
 
         return text
 
@@ -283,10 +269,10 @@ class Painter():
                 return
             char = char[0]
         elif char == "search":
-            try:
-                search = await self._input("Unicode char name :", width=40)
-            except WidgetCancelled:
+            search = await self._input("Unicode char name :", width=40)
+            if not search:
                 return
+
             options = TM.unicode.lookup(search)
             if not options:
                 self._message("Character not found")
