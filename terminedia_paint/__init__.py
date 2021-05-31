@@ -261,7 +261,7 @@ class Painter():
         await asyncio.sleep(2)
         msg.kill()
 
-    def pick_character(self, options):
+    async def pick_character(self, options):
         options = {
             "█": "█",
             "*": "*",
@@ -271,51 +271,37 @@ class Painter():
             "search": "search"
         }
 
-        label = None
-        selector = None
-        extended_selector = None
 
-        def _pick_extended(entry, event=None):
-            self.sc.context.char = entry.value
-            extended_selector.kill()
-
-
-        def _search_text(entry, event=None):
-            nonlocal extended_selector
-            options = TM.unicode.lookup(entry.value)
+        selector = TM.widgets.Selector(self.sc, options, pos=(0,0), border=True, cancellable=True) # select=_pick_option, border=True)
+        try:
+            char = await selector
+        except TM.widgets.WidgetCancelled:
+            return
+        if char == "type":
+            char = (await self._input("Type character:", width=2))
+            if not char:
+                return
+            char = char[0]
+        elif char == "search":
+            try:
+                search = await self._input("Unicode char name :", width=40)
+            except WidgetCancelled:
+                return
+            options = TM.unicode.lookup(search)
+            if not options:
+                self._message("Character not found")
+                return
             if len(options) == 1:
-                self.sc.context.char = options[0]
+                char = options[0]
             elif options:
                 options = {f"{str(option)} - {option.name[0:20]}": str(option) for option in options}
-                extended_selector = TM.widgets.Selector(self.sc, options, pos=(0,0), select=_pick_extended, border=True)
-                entry.kill()
-                label.kill()
-                selector.kill()
+                extended_selector = TM.widgets.Selector(self.sc, options, pos=(0,0), border=True, cancellable=True)
+                try:
+                    char = await extended_selector
+                except WidgetCancelled:
+                    return
 
-            else:
-                pass
-            entry.kill()
-            label.kill()
-            selector.kill()
-
-        def _type_text(entry, event=None):
-            self.sc.context.char = entry.value[0]
-            entry.kill()
-            label.kill()
-            selector.kill()
-
-        def _pick_option(selector):
-            nonlocal label
-            if selector.value == "type":
-                label = TM.widgets.Label(self.sc, pos=(0,12), text="Character: ")
-                entry = TM.widgets.Entry(self.sc, pos=(10, 12), width=2, enter_callback=_type_text)
-            elif selector.value == "search":
-                label = TM.widgets.Label(self.sc, pos=(0,12), text="Search: ")
-                entry = TM.widgets.Entry(self.sc, pos=(10, 12), width=25, enter_callback=_search_text)
-            else:
-                self.sc.context.char = selector.value
-                selector.kill()
-        selector = TM.widgets.Selector(self.sc, options, pos=(0,0), select=_pick_option, border=True)
+        self.sc.context.char = char
 
 
     async def pick_color(self, event=None):
