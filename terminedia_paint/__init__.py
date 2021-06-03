@@ -75,8 +75,8 @@ class Painter():
             "b": (self.pick_background, "Background Color"),
             "l": (self.pick_character, "Pick Char"),
             "i": (self.insert_image, "Paste Image"),
-            "e": ((lambda e: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
-            "p": ((lambda e: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
+            "e": ((lambda e=None: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
+            "p": ((lambda e=None: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
             "h": ("toggle", "Toggle help"), #(self.toggle_help, "Toggle help"),
             "q": (self.quit, "Quit"),
         }
