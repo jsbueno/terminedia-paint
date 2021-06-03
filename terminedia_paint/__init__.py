@@ -77,29 +77,25 @@ class Painter():
             "i": (self.insert_image, "Paste Image"),
             "e": ((lambda e: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
             "p": ((lambda e: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
-            "h": (self.toggle_help, "Toggle help"),
+            "h": ("toggle", "Toggle help"), #(self.toggle_help, "Toggle help"),
             "q": (self.quit, "Quit"),
         }
-
-        for shortcut, (method, doc) in self.global_shortcuts.items():
-            if method is None:
-                continue
-            if len(shortcut) > 1:
-                shortcut = getattr(TM.input.KeyCodes, shortcut)
-            TM.events.Subscription(TM.events.KeyPress, method, guard=(lambda s: lambda event: event.key == s)(shortcut))
 
         self.tools = {
             "paint": SimplePaintTool(self.sc.shape.draw),
             "erase": SimpleEraseTool(self.sc.shape.draw)
         }
+        self.menu = TM.widgets.ScreenMenu(self.sc, self.global_shortcuts, columns=3)
 
     def state_reset(self):
         self.dirty = False
         self.active_tool = self.tools["paint"]
         self.active_tool.reset(self.sc.draw)
         self.continous_painting = False
-        self.help_active = False
-        self.toggle_help()
+        # self.help_active = False
+        if getattr(self, "menu", None):
+            self.menu.sprite.active = True
+        # self.toggle_help()
 
     def run(self):
         with self.sc:
@@ -130,6 +126,7 @@ class Painter():
                 self.pos.y > 0:
             self.pos -= (0, 1)
         if key == " ":
+            self.active_tool.last_set = None
             self.active_tool.set_point(self.pos)
             self.active_tool.last_set = self.pos
             self.dirty = True
@@ -219,7 +216,6 @@ class Painter():
         self.sc.shape.draw.blit(self.pos, img)
         self.dirty = True
 
-
     async def save(self, event=None):
         img = TM.shape(self.sc.size)
         file_name = getattr(self, "file_name", "")
@@ -247,7 +243,7 @@ class Painter():
         await asyncio.sleep(2)
         msg.kill()
 
-    async def pick_character(self, options):
+    async def pick_character(self, event=None):
         options = {
             "█": "█",
             "*": "*",
@@ -336,33 +332,6 @@ class Painter():
             finally:
                 color_label.kill()
         return color
-
-
-    def toggle_help(self, event=None):
-        if not getattr(self, "help_sprite", None):
-            rows = ceil(len(self.global_shortcuts) // 3) + 1
-            sh = TM.shape((self.sc.size.x,  rows + 2))
-            sh.text[1].add_border(transform=box_transformers["DOUBLE"])
-            col_width = (sh.size.x - 2) // 3
-            current_row = 0
-            sh.context.foreground = TM.DEFAULT_FG
-            current_col = 0
-            actual_width = min(col_width, 25)
-            for shortcut, (callback, text) in self.global_shortcuts.items():
-                sh.text[1][current_col * col_width + 1, current_row] = f"[effects: bold|underline]{shortcut}[/effects]{text:>{actual_width - len(shortcut) - 3}s}"
-                current_row += 1
-                if current_row >= rows:
-                    current_col += 1
-                    current_row = 0
-
-            self.help_sprite = TM.Sprite(sh, alpha=False)
-        if not self.help_active:
-            self.help_sprite.pos = (0, self.sc.size.y - self.help_sprite.rect.height)
-            self.sc.sprites.add(self.help_sprite)
-            self.help_active = True
-        else:
-            self.help_sprite.kill()
-            self.help_active = False
 
     @property
     def pos(self):
