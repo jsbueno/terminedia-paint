@@ -33,9 +33,10 @@ class SimplePaintTool:
         self.drawable = drawable
         self.last_set = None
 
-    def set_point(self, pos):
+    def set_point(self, pos, interpolate=False):
         if self.last_set:
-            self.drawable.line(pos, self.last_set, erase=self.erase)
+            if interpolate:
+                self.drawable.line(pos, self.last_set, erase=self.erase)
             self.last_set = None
         elif not self.erase:
             self.drawable.set(pos)
@@ -97,7 +98,7 @@ class Painter():
         # self.help_active = False
         if getattr(self, "menu", None):
             self.menu.sprite.active = True
-        # self.toggle_help()
+        self.drag_drawing = False
 
     def run(self):
         with self.sc:
@@ -136,7 +137,7 @@ class Painter():
             if getattr(self.active_tool, "one_to_last_click", False):
                 self.active_tool.last_set = self.active_tool.one_to_last_click
                 self.active_tool.one_to_last_click = None
-            self.active_tool.set_point(self.pos)
+            self.active_tool.set_point(self.pos, interpolate=True)
             self.active_tool.last_set = self.pos
             self.dirty = True
         if key == "x":
@@ -160,8 +161,9 @@ class Painter():
         self.active_tool.one_to_last_click = self.active_tool.last_set
         self.active_tool.last_set = None
         self.active_tool.set_point(event.pos)
-        self.active_tool.last_set = event.pos
+        # self.active_tool.last_set = event.pos
         self.pos = event.pos
+        self.drag_drawing = False
         self.dirty = True
 
     def mouse_double_click(self, event):
@@ -169,9 +171,13 @@ class Painter():
         self.sc.context.char = random.choice("#*!|><")
 
     def mouse_move(self, event):
+        if event.tick - getattr(self, "last_dragging_tick", 0) > 1:
+            self.drag_drawing = False
         if event.buttons:
-            self.active_tool.set_point(event.pos)
+            self.active_tool.set_point(event.pos, interpolate=self.drag_drawing)
             self.active_tool.last_set = event.pos
+            self.drag_drawing = True
+            self.last_dragging_tick = event.tick
             self.dirty = True
         self.pos = event.pos
 
