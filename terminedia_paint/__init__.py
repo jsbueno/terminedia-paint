@@ -1,5 +1,6 @@
 import asyncio
 import time
+import random
 from ast import literal_eval
 from math import ceil
 
@@ -61,7 +62,8 @@ class Painter():
 
     def event_setup(self):
         TM.events.Subscription(TM.events.KeyPress, self.key_dispatcher)
-        TM.events.Subscription(TM.events.MousePress, self.mouse_click)
+        TM.events.Subscription(TM.events.MouseClick, self.mouse_click)
+        TM.events.Subscription(TM.events.MouseDoubleClick, self.mouse_double_click)
         TM.events.Subscription(TM.events.MouseMove, self.mouse_move)
 
     def tool_setup(self):
@@ -161,6 +163,10 @@ class Painter():
         self.active_tool.last_set = event.pos
         self.pos = event.pos
         self.dirty = True
+
+    def mouse_double_click(self, event):
+        #FIXME - provisional to test double-click event
+        self.sc.context.char = random.choice("#*!|><")
 
     def mouse_move(self, event):
         if event.buttons:
