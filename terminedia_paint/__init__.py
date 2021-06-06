@@ -81,6 +81,8 @@ class Painter():
             "i": (self.insert_image, "Paste Image"),
             "e": ((lambda e=None: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
             "p": ((lambda e=None: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
+            "F": ((lambda e=None: self.sc.draw.fill()), "Fill Image"),
+            "f": ((lambda e=None: self.sc.draw.floodfill(self.pos)), "Flood Fill"),
             "h": ("toggle", "Toggle help"), #(self.toggle_help, "Toggle help"),
             "q": (self.quit, "Quit"),
         }
