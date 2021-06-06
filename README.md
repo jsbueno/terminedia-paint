@@ -35,6 +35,14 @@ How to run: pip install the main branch directly with
 `pip install git+https://github.com/jsbueno/terminedia-paint.git
 and run "terminedia-paint" on the terminal.
 
+Saving and exportingg: the file extension one use to save a file will determine the file type:
+    if "snapshot", it is a reloadable internal format, that can be loaded back
+    with "insert image". (Load occurs at cursor position).
+    Other supported formats are "HTML": a hard-coded HTML with characters using inline-style
+    for positioning and color, and "ANSI" (the default fule format):
+    a text file  which will be correctly displayed in the terminal
+    when printed (e.g. with the `cat` command)
+
 
 It is currently using the main branch of terminedia so it
 might break if upadated, via pip, without updating terminedia as well.

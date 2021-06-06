@@ -3,6 +3,7 @@ import time
 import random
 from ast import literal_eval
 from math import ceil
+from pathlib import Path
 
 import sys, traceback
 
@@ -197,17 +198,34 @@ class Painter():
 
         return text
 
+    async def load_image_as_shape(self, img_path):
+        try:
+            #self.sc.__exit__(None, None, None)
+            #import os; os.system("reset")
+            shape = TM.shape(img_path)
+        except (OSError, NotImplementedError):
+
+            await self._message(f"Can't open file {img_path}")
+            return
+        self.sc.draw.blit(self.pos, shape)
+
+
     async def insert_image(self, event=None):
+        """Attempts to open an image as a pixel-based image file with PIL
+
+        If that fails fallback to reading a terminedia-shape - which can load
+        pure text (without markup, for the time being) and shape "snapshot" files
+        """
+
 
         size=(100,50)
         img_path = await self._input("Load image:")
         if not img_path:
             return
-
         try:
             img_meta = Image.open(img_path)
         except OSError:
-            await self._message(f"Can't open file {img_path}")
+            await self.load_image_as_shape(img_path)
             return
 
         x, y = self.sc.size
@@ -247,7 +265,11 @@ class Painter():
         for sprite in self.sc.sprites:
             if sprite in active_sprites:
                 sprite.active = active_sprites[sprite]
-        img.render(output=self.file_name, backend=("ANSI" if self.file_name.lower()[-4:] != "html" else "HTML"))
+        path = Path(self.file_name)
+        backend = path.suffix.strip(".").upper()
+        if backend not in ("HTML", "SNAPSHOT"):
+            backend = "ANSI"
+        img.render(output=path, backend=backend)
         self.dirty = False
 
     async def _message(self, text):
