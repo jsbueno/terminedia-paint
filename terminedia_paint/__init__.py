@@ -55,6 +55,7 @@ class Painter():
 
     def __init__(self):
         self.sc = TM.Screen()
+        self.sc.shape.undo_active=True
         self.pointer = TM.Sprite(TM.shape((1,1)))
         self.pos = V2(0,0)
         self.pointer.shape[0,0] = "*"
@@ -66,6 +67,7 @@ class Painter():
         TM.events.Subscription(TM.events.KeyPress, self.key_dispatcher)
         TM.events.Subscription(TM.events.MouseClick, self.mouse_click)
         TM.events.Subscription(TM.events.MouseDoubleClick, self.mouse_double_click)
+        TM.events.Subscription(TM.events.MouseRelease, self.mouse_release)
         TM.events.Subscription(TM.events.MouseMove, self.mouse_move)
 
     def tool_setup(self):
@@ -83,6 +85,8 @@ class Painter():
             "p": ((lambda e=None: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
             "F": ((lambda e=None: self.sc.draw.fill()), "Fill Image"),
             "f": ((lambda e=None: self.sc.draw.floodfill(self.pos)), "Flood Fill"),
+            "^z":((lambda e=None: self.sc.shape.undo()), "Undo"),
+            "^y": ((lambda e=None: self.sc.shape.redo()), "Redo"),
             "h": ("toggle", "Toggle help"), #(self.toggle_help, "Toggle help"),
             "q": (self.quit, "Quit"),
         }
@@ -102,6 +106,7 @@ class Painter():
         if getattr(self, "menu", None):
             self.menu.sprite.active = True
         self.drag_drawing = False
+        self.last_painting_move = (-1, -1)
 
     def run(self):
         with self.sc:
@@ -168,6 +173,7 @@ class Painter():
         self.pos = event.pos
         self.drag_drawing = False
         self.dirty = True
+        self.last_painting_move = event.pos
 
     def mouse_double_click(self, event):
         #FIXME - provisional to test double-click event
@@ -177,12 +183,27 @@ class Painter():
         if event.tick - getattr(self, "last_dragging_tick", 0) > 1:
             self.drag_drawing = False
         if event.buttons:
+            if getattr(self, "_undo_group", None) is None:
+                self._undo_group =  True
+                self.sc.shape.undo_group_start()
+            pos = event.pos
+            if self.last_painting_move == pos:
+                # Avoids acummulating several repeated paiting events on the same position -
+                # each of which generates one UNDO state.
+                # FIXME: have a terminedia public 'undo-group-start' to undo a full stroke at once.
+                return
             self.active_tool.set_point(event.pos, interpolate=self.drag_drawing)
             self.active_tool.last_set = event.pos
             self.drag_drawing = True
             self.last_dragging_tick = event.tick
             self.dirty = True
+            self.last_painting_move = pos
         self.pos = event.pos
+
+    def mouse_release(self, event):
+        if getattr(self, "_undo_group", None):
+            self.sc.shape.undo_group_end()
+            self._undo_group = None
 
     async def _input(self, label, pos=(0,3), default="", width=30):
 
