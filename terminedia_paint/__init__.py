@@ -13,6 +13,7 @@ import terminedia as TM
 from terminedia import V2
 from terminedia.input import KeyCodes
 from terminedia.transformers.library import box_transformers
+from terminedia.values import EMPTY
 
 """
 Early version of paint-app for the terminal, using Terminedia.
@@ -33,6 +34,13 @@ class SimplePaintTool:
     def reset(self, drawable):
         self.drawable = drawable
         self.last_set = None
+
+    def toggle_point(self, pos):
+        if self.drawable.get(pos) is EMPTY:
+            self.drawable.set(pos)
+            self.last_set = pos
+        else:
+            self.drawable.reset(pos)
 
     def set_point(self, pos, interpolate=False):
         if self.last_set:
@@ -72,7 +80,7 @@ class Painter():
 
     def tool_setup(self):
         self.global_shortcuts = {
-            "<space>": (None, "Paint pixel"),
+            "<space>": (None, "Toggle pixel"),
             "←↑→↓": (None, "Move cursor"),
             "x": (None, "Toggle drawing"),
             "v": (None, "Line to last point"),
@@ -138,7 +146,7 @@ class Painter():
             self.pos -= (0, 1)
         if key == " ":
             self.active_tool.last_set = None
-            self.active_tool.set_point(self.pos)
+            self.active_tool.toggle_point(self.pos)
             self.active_tool.last_set = self.pos
             self.dirty = True
         if key == "v":
