@@ -28,34 +28,41 @@ class CancelledException(Exception):
 
 class SimplePaintTool:
     erase = False
-    def __init__(self, drawable):
-        self.reset(drawable)
+    def __init__(self, drawable_cmds):
+        self.reset(drawable_cmds)
 
-    def reset(self, drawable):
-        self.drawable = drawable
+    def reset(self, drawable_cmds):
+        self.draw = drawable_cmds
         self.last_set = None
 
     def toggle_point(self, pos):
-        if self.drawable.get(pos) is EMPTY:
-            self.drawable.set(pos)
+        if self.draw.get(pos) in (EMPTY, False):
+            self.draw.set(pos)
             self.last_set = pos
         else:
-            self.drawable.reset(pos)
+            self.draw.reset(pos)
 
     def set_point(self, pos, interpolate=False):
-        if self.last_set:
-            if interpolate:
-                self.drawable.line(pos, self.last_set, erase=self.erase)
+        if self.last_set and interpolate:
+            self.draw.line(pos, self.last_set, erase=self.erase)
             self.last_set = None
         elif not self.erase:
-            self.drawable.set(pos)
+            self.draw.set(pos)
         else:
-            self.drawable.set(pos)
-        # self.last_set = pos
+            self.draw.reset(pos)
 
 
 class SimpleEraseTool(SimplePaintTool):
     erase = True
+
+
+resolutions = {
+    1: ("block", V2(1, 1)),
+    2: ("square", V2(1, .5)),
+    4: ("high", V2(.5, .5)),
+    6: ("sextant", V2(.5, 1 / 3)),
+    8: ("braille", V2(.5, .25)),
+}
 
 
 class Painter():
@@ -65,7 +72,6 @@ class Painter():
         self.sc = TM.Screen()
         self.sc.shape.undo_active=True
         self.pointer = TM.Sprite(TM.shape((1,1)))
-        self.pos = V2(0,0)
         self.pointer.shape[0,0] = "*"
         self.pointer.transformers.append(TM.Transformer(char=lambda char, tick: char if (tick // 8) %2 else TM.TRANSPARENT))
         self.sc.shape.sprites.add(self.pointer)
@@ -89,6 +95,8 @@ class Painter():
             "b": (self.pick_background, "Background Color"),
             "l": (self.pick_character, "Pick Char"),
             "i": (self.insert_image, "Paste Image"),
+            "1": (self.change_resolution_1, "Draw with full chars"),
+            "4": (self.change_resolution_4, "Draw with 1/4 blocks"),
             "e": ((lambda e=None: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
             "p": ((lambda e=None: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
             "F": ((lambda e=None: self.sc.draw.fill()), "Fill Image"),
@@ -105,15 +113,24 @@ class Painter():
         }
         self.menu = TM.widgets.ScreenMenu(self.sc, self.global_shortcuts, columns=3)
 
+    def change_resolution_1(self):
+        self.resolution = 1
+
+    def change_resolution_4(self):
+        self.resolution = 4
+
     def state_reset(self):
+        self.resolution = 1
         self.dirty = False
         self.active_tool = self.tools["paint"]
         self.active_tool.reset(self.sc.draw)
-        self.continous_painting = False
+        self.continuous_painting = False
         # self.help_active = False
         if getattr(self, "menu", None):
             self.menu.sprite.active = True
         self.drag_drawing = False
+        self.resolution = 1
+        self.pos = V2(0,0)
         self.last_painting_move = (-1, -1)
 
     def run(self):
@@ -130,16 +147,17 @@ class Painter():
     def key_dispatcher(self, event):
         key = event.key
         width = 1
-        if isinstance(self.sc.context.char, TM.unicode.Character) and self.sc.context.char.width=="W":
+        if self.resolution == 1 and isinstance(self.sc.context.char, TM.unicode.Character) and self.sc.context.char.width=="W":
             width = 2
+        previous_pos = self.pos
         if key == KeyCodes.RIGHT and \
-                self.pos.x < self.sc.size.x:
+                self.pos.x < self.drawable.size.x:
             self.pos += (width, 0)
         elif key == KeyCodes.LEFT and \
                 self.pos.x > 0:
             self.pos -= (width, 0)
         elif key == KeyCodes.DOWN and \
-                self.pos.y < self.sc.size.y:
+                self.pos.y < self.drawable.size.y:
             self.pos += (0, 1)
         elif key == KeyCodes.UP and \
                 self.pos.y > 0:
@@ -157,10 +175,10 @@ class Painter():
             self.active_tool.last_set = self.pos
             self.dirty = True
         if key == "x":
-            self.continous_painting = ~self.continous_painting
+            self.continuous_painting = ~self.continuous_painting
             self.active_tool.last_set = None
 
-        if self.continous_painting:
+        if previous_pos != self.pos and self.continuous_painting:
             self.active_tool.set_point(self.pos)
             self.active_tool.last_set = self.pos
             self.dirty = True
@@ -176,9 +194,9 @@ class Painter():
         #if not TM.inkey() == "v":
         self.active_tool.one_to_last_click = self.active_tool.last_set
         self.active_tool.last_set = None
-        self.active_tool.set_point(event.pos)
         # self.active_tool.last_set = event.pos
-        self.pos = event.pos
+        self.pointer.pos = event.pos
+        self.active_tool.set_point(self.pos)
         self.drag_drawing = False
         self.dirty = True
         self.last_painting_move = event.pos
@@ -194,19 +212,21 @@ class Painter():
             if getattr(self, "_undo_group", None) is None:
                 self._undo_group =  True
                 self.sc.shape.undo_group_start()
-            pos = event.pos
+            self.pointer.pos = event.pos
+            pos = self.pos
             if self.last_painting_move == pos:
                 # Avoids acummulating several repeated paiting events on the same position -
                 # each of which generates one UNDO state.
                 # FIXME: have a terminedia public 'undo-group-start' to undo a full stroke at once.
                 return
-            self.active_tool.set_point(event.pos, interpolate=self.drag_drawing)
-            self.active_tool.last_set = event.pos
+            self.active_tool.set_point(pos, interpolate=self.drag_drawing)
+            self.active_tool.last_set = pos
             self.drag_drawing = True
             self.last_dragging_tick = event.tick
             self.dirty = True
             self.last_painting_move = pos
-        self.pos = event.pos
+        else:
+            self.pointer.pos = event.pos
 
     def mouse_release(self, event):
         if getattr(self, "_undo_group", None):
@@ -400,10 +420,45 @@ class Painter():
 
     @property
     def pos(self):
-        return self.pointer.pos
+        physical_pos = self.pointer.pos
+        res = resolutions[self.resolution][1]
+        factor = 1/res[0], 1/res[1]
+        pos = V2(
+            physical_pos[0] * factor[0] + self._remainder_pos[0],
+            physical_pos[1] * factor[1] + self._remainder_pos[1]
+        ).as_int
+        return pos
     @pos.setter
     def pos(self, value):
-        self.pointer.pos = value
+        res = resolutions[self.resolution][1]
+        factor = 1/res[0], 1/res[1]
+        physical_pos = V2(value[0] // factor[0], value[1] // factor[1]).as_int
+        remainder_pos = self._remainder_pos = V2(value[0] % factor[0], value[1] % factor[1]).as_int
+        self.pointer.pos = physical_pos
+
+        if self.resolution == 1:
+            return
+        self.pointer.shape[0,0] = EMPTY
+        pointer_draw = (self.pointer.shape if value == 1 else getattr(self.pointer.shape, resolutions[self.resolution][0])).draw
+        pointer_draw.set(remainder_pos)
+        # todo: change pointer char to the proper pixel in the proper resolution
+
+    @property
+    def resolution(self):
+        return self.__dict__["resolution"]
+
+    @resolution.setter
+    def resolution(self, value):
+        if value not in resolutions:
+            return
+        self._remainder_pos = 0, 0
+        self.drawable = drawable = self.sc.shape if value == 1 else getattr(self.sc.shape, resolutions[value][0])
+
+        self.tools["paint"].reset(drawable.draw)
+        self.tools["erase"].reset(drawable.draw)
+        self.__dict__["resolution"] = value
+        self.pointer.shape[0,0] = EMPTY
+
 
 def run():
     painter = Painter()
