@@ -2,6 +2,7 @@ import asyncio
 import time
 import random
 from ast import literal_eval
+from collections.abc import Sequence
 from math import ceil
 from pathlib import Path
 
@@ -36,7 +37,14 @@ class SimplePaintTool:
         self.last_set = None
 
     def toggle_point(self, pos):
-        if self.draw.get(pos) in (EMPTY, False):
+        open("bla11.txt", "at").write(repr(self.draw.get(pos)) + "\n")
+        value = self.draw.get(pos)
+        if isinstance(value, TM.Color):
+            value = value == self.draw.context.foreground
+        elif isinstance(value, Sequence):
+            value = value[0]
+            value = False if value == " " else bool(value)
+        if not value:
             self.draw.set(pos)
             self.last_set = pos
         else:
@@ -64,15 +72,16 @@ resolutions = {
     8: ("braille", V2(.5, .25)),
 }
 
+POINTER_CHAR = "*"
+
 
 class Painter():
     active_widgets = []
 
     def __init__(self):
         self.sc = TM.Screen()
-        self.sc.shape.undo_active=True
+        self.sc.shape.undo_active = True
         self.pointer = TM.Sprite(TM.shape((1,1)))
-        self.pointer.shape[0,0] = "*"
         self.pointer.transformers.append(TM.Transformer(char=lambda char, tick: char if (tick // 8) %2 else TM.TRANSPARENT))
         self.sc.shape.sprites.add(self.pointer)
         TM.context.fps = 20
@@ -95,8 +104,11 @@ class Painter():
             "b": (self.pick_background, "Background Color"),
             "l": (self.pick_character, "Pick Char"),
             "i": (self.insert_image, "Paste Image"),
-            "1": (self.change_resolution_1, "Draw with full chars"),
-            "4": (self.change_resolution_4, "Draw with 1/4 blocks"),
+            "1": (lambda e=None: setattr(self, "resolution", 1), "Draw with full chars"),
+            "2": (lambda e=None: setattr(self, "resolution", 2), "Draw with 1/2 blocks"),
+            "4": (lambda e=None: setattr(self, "resolution", 4), "Draw with 1/4 blocks"),
+            "6": (lambda e=None: setattr(self, "resolution", 6), "Draw with 1/6 blocks"),
+            "8": (lambda e=None: setattr(self, "resolution", 8), "Draw with braille dots"),
             "e": ((lambda e=None: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
             "p": ((lambda e=None: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
             "F": ((lambda e=None: self.sc.draw.fill()), "Fill Image"),
@@ -113,12 +125,6 @@ class Painter():
         }
         self.menu = TM.widgets.ScreenMenu(self.sc, self.global_shortcuts, columns=3)
 
-    def change_resolution_1(self):
-        self.resolution = 1
-
-    def change_resolution_4(self):
-        self.resolution = 4
-
     def state_reset(self):
         self.resolution = 1
         self.dirty = False
@@ -132,6 +138,7 @@ class Painter():
         self.resolution = 1
         self.pos = V2(0,0)
         self.last_painting_move = (-1, -1)
+
 
     def run(self):
         with self.sc:
@@ -176,10 +183,11 @@ class Painter():
             self.dirty = True
         if key == "x":
             self.continuous_painting = ~self.continuous_painting
-            self.active_tool.last_set = None
+            self.active_tool.last_set = self.pos if not self.continuous_painting else None
 
         if previous_pos != self.pos and self.continuous_painting:
-            self.active_tool.set_point(self.pos)
+            self.active_tool.set_point(previous_pos)
+            #self.active_tool.set_point(self.pos)
             self.active_tool.last_set = self.pos
             self.dirty = True
 
@@ -196,7 +204,7 @@ class Painter():
         self.active_tool.last_set = None
         # self.active_tool.last_set = event.pos
         self.pointer.pos = event.pos
-        self.active_tool.set_point(self.pos)
+        self.active_tool.toggle_point(self.pos)
         self.drag_drawing = False
         self.dirty = True
         self.last_painting_move = event.pos
@@ -268,8 +276,6 @@ class Painter():
         pure text (without markup, for the time being) and shape "snapshot" files
         """
 
-
-        size=(100,50)
         img_path = await self._input("Load image:")
         if not img_path:
             return
@@ -457,7 +463,7 @@ class Painter():
         self.tools["paint"].reset(drawable.draw)
         self.tools["erase"].reset(drawable.draw)
         self.__dict__["resolution"] = value
-        self.pointer.shape[0,0] = EMPTY
+        self.pointer.shape[0,0] = EMPTY if value != 1 else POINTER_CHAR
 
 
 def run():
