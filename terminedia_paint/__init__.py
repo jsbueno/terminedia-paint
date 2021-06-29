@@ -112,7 +112,7 @@ class Painter():
             "e": ((lambda e=None: setattr(self, "active_tool", self.tools["erase"])), "Erase"),
             "p": ((lambda e=None: setattr(self, "active_tool", self.tools["paint"])), "Paint"),
             "F": ((lambda e=None: self.sc.draw.fill()), "Fill Image"),
-            "f": ((lambda e=None: self.sc.draw.floodfill(self.pos)), "Flood Fill"),
+            "f": ((lambda e=None: self.drawable.draw.floodfill(self.pos)), "Flood Fill"),
             "^z":((lambda e=None: self.sc.shape.undo()), "Undo"),
             "^y": ((lambda e=None: self.sc.shape.redo()), "Redo"),
             "h": ("toggle", "Toggle help"), #(self.toggle_help, "Toggle help"),
@@ -123,7 +123,7 @@ class Painter():
             "paint": SimplePaintTool(self.sc.shape.draw),
             "erase": SimpleEraseTool(self.sc.shape.draw)
         }
-        self.menu = TM.widgets.ScreenMenu(self.sc, self.global_shortcuts, columns=3)
+        self.menu = TM.widgets.ScreenMenu(self.sc, self.global_shortcuts, columns=3, focus_position=None)
 
     def state_reset(self):
         self.resolution = 1
