@@ -15,6 +15,7 @@ from terminedia import V2
 from terminedia.input import KeyCodes
 from terminedia.transformers.library import box_transformers
 from terminedia.values import EMPTY
+from terminedia.widgets import WidgetCancelled
 
 """
 Early version of paint-app for the terminal, using Terminedia.
@@ -368,7 +369,7 @@ class Painter():
                 char = options[0]
             elif options:
                 options = {f"{str(option)} - {option.name[0:20]}": str(option) for option in options}
-                extended_selector = TM.widgets.Selector(self.sc, options, pos=(0,0), border=True, cancellable=True)
+                extended_selector = TM.widgets.Selector(self.sc, options, pos=(0,0), border=True, max_height=(self.sc.size.y - self.menu.shape.size.y - 2),  cancellable=True)
                 try:
                     char = await extended_selector
                 except WidgetCancelled:
