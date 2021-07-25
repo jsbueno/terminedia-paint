@@ -60,6 +60,12 @@ class SimplePaintTool:
         else:
             self.draw.reset(pos)
 
+class PathTypeTool:
+    """allows free typing following a previous drawn path on the screen"""
+    # TBD
+    def __init__(self, drawable_cmds):
+        self.reset(drawable_cmds)
+
 
 class SimpleEraseTool(SimplePaintTool):
     erase = True
@@ -403,6 +409,18 @@ class Painter():
             "black":  TM.Color("black"),
             "other": "other"
         }
+
+        new_colors = {}
+        for color_label, color in list(colors.items()):
+            if color is TM.DEFAULT_FG or color == TM.Color("black") or not isinstance(color, TM.Color):
+                new_label = color_label
+            elif color == TM.Color('white'):
+                new_label = f"[foreground: black][background: white]{color_label}"
+            else:
+                new_label = f"[foreground: {color.html}]{'[background: white]' if color == TM.Color('white') else ''}{color_label}"
+            new_colors[new_label] = color
+        colors = new_colors
+
         color_label = None
         color_widget = None
 
