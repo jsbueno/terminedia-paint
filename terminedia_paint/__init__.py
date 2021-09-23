@@ -80,7 +80,7 @@ class SimplePaintTool:
             self.last_set = self.parent.pos
             self.parent.dirty = True
         if key == "v":
-            if getattr(self.active_tool, "one_to_last_click", False):
+            if getattr(self, "one_to_last_click", False):
                 self.last_set = self.one_to_last_click
                 self.one_to_last_click = None
             self.set_point(self.parent.pos, interpolate=True)
@@ -114,6 +114,10 @@ class PathTypeTool(SimplePaintTool):
         self.last_direction_change = -2
         self.mode = "line"
 
+    def start(self):
+        super().start()
+        self.rendered = []
+
 
     def handle_key(self, key):
         self.tick += 1
@@ -126,11 +130,14 @@ class PathTypeTool(SimplePaintTool):
             return
         if key == TM.keyboard.keycodes.ESC:
             self.parent.state_reset(pos=self.parent.pos, dirty_status=True)
-
+        if key == TM.keyboard.keycodes.BACK:
+            self.backspace()
+            return
 
         if key in TM.keyboard.keycodes.codes:
             return
         for cursor in self.cursores or (self.parent.pos,):
+            self.rendered.append((cursor, self.shape[cursor].value))
             self.shape.text[self.text_plane][cursor] = key
         self.advance_cursores()
 
@@ -154,6 +161,13 @@ class PathTypeTool(SimplePaintTool):
                 new_cursores.extend(new_cursores_straight or new_cursores_diag)
 
         self.cursores = new_cursores
+
+    def backspace(self):
+        if not self.rendered:
+            return
+        position, previous_char = self.rendered.pop()
+        self.shape[position] = previous_char
+        self.cursores = [position]
 
     def toggle_point(self, pos):
         self.cursores = [pos,]
