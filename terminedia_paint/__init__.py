@@ -193,6 +193,7 @@ class Painter():
 
     def __init__(self):
         self.sc = TM.Screen()
+        self.sc.shape.undo_active = True
         self.pointer = TM.Sprite(TM.shape((1,1)))
         # self.pointer.transformers.append(PaintCursorTransformer)
         self.sc.shape.sprites.add(self.pointer)
