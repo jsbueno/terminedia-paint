@@ -3,6 +3,7 @@ import time
 import random
 from ast import literal_eval
 from collections.abc import Sequence
+from itertools import product
 from math import ceil
 from pathlib import Path
 
@@ -30,10 +31,20 @@ class CancelledException(Exception):
 
 class SimplePaintTool:
     erase = False
+
+    transformer = TM.Transformer(char=lambda char, tick: char if (tick // 8) %2 else TM.TRANSPARENT)
+
     def __init__(self, parent, shape):
         self.parent = parent
         self.shape = shape
         self.reset(shape.draw)
+
+    def start(self):
+        self.parent.pointer.transformers.clear
+        self.parent.pointer.transformers.append(self.transformer)
+
+    def stop(self):
+        pass
 
     def reset(self, drawable_cmds):
         self.draw = drawable_cmds
@@ -91,6 +102,9 @@ class SimpleEraseTool(SimplePaintTool):
 
 class PathTypeTool(SimplePaintTool):
     """allows free typing following a previous drawn path on the screen"""
+
+    transformer = TM.Transformer(char=lambda char: TM.TRANSPARENT)
+
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.cursores = []
@@ -98,20 +112,20 @@ class PathTypeTool(SimplePaintTool):
         self.direction = TM.Directions.RIGHT
         self.tick = 0
         self.last_direction_change = -2
+        self.mode = "line"
 
 
     def handle_key(self, key):
         self.tick += 1
         if self.parent.pos != self.parent.previous_pos:
-            if len(self.cursores) == 1:
+            if self.mode == "line" and len(self.cursores) == 1 and self.tick - self.last_direction_change > 1:
                 self.cursores[0] = self.cursores[0] - self.direction
-            if self.tick - self.last_direction_change > 1:
-                self.direction = self.parent.pos - self.parent.previous_pos
+            self.direction = self.parent.pos - self.parent.previous_pos
             self.last_direction_change = self.tick
             self.advance_cursores()
             return
         if key == TM.keyboard.keycodes.ESC:
-            self.parent.state_reset(pos=self.parent.pos)
+            self.parent.state_reset(pos=self.parent.pos, dirty_status=True)
 
 
         if key in TM.keyboard.keycodes.codes:
@@ -123,12 +137,30 @@ class PathTypeTool(SimplePaintTool):
     def advance_cursores(self):
         new_cursores = []
         for i, cursor in enumerate(self.cursores or (self.parent.pos,)):
-            new_cursores.append(cursor + self.direction)
+            if self.mode == "line":
+                new_cursores.append(cursor + self.direction)
+            else:
+                # the two cursores sub-list strategy is to avoid duplicating the cursores in
+                # a stepped corner in a single line: that is, if there is at least one straight path,
+                # that one is taken and diagonals are ignored. if there are only diagonals, those are taken
+                new_cursores_diag = []
+                new_cursores_straight = []
+                for delta in map(V2, product((-1, 0, 1),(-1, 0, 1))):
+                    if delta == (0, 0):
+                        continue
+                    new_pos = cursor + delta
+                    if self.shape[new_pos].value == TM.values.FULL_BLOCK:
+                        (new_cursores_straight if 0 in delta else new_cursores_diag).append(new_pos)
+                new_cursores.extend(new_cursores_straight or new_cursores_diag)
+
         self.cursores = new_cursores
 
     def toggle_point(self, pos):
         self.cursores = [pos,]
-
+        if self.shape[pos].value == TM.values.FULL_BLOCK:
+            self.mode = "path"
+        else:
+            self.mode = "line"
 
 
 resolutions = {
@@ -148,7 +180,7 @@ class Painter():
     def __init__(self):
         self.sc = TM.Screen()
         self.pointer = TM.Sprite(TM.shape((1,1)))
-        self.pointer.transformers.append(TM.Transformer(char=lambda char, tick: char if (tick // 8) %2 else TM.TRANSPARENT))
+        # self.pointer.transformers.append(PaintCursorTransformer)
         self.sc.shape.sprites.add(self.pointer)
         TM.context.fps = 20
 
@@ -193,9 +225,9 @@ class Painter():
         }
         self.menu = TM.widgets.ScreenMenu(self.sc, self.global_shortcuts, columns=3, focus_position=None)
 
-    def state_reset(self, pos=None):
+    def state_reset(self, pos=None, dirty_status=False):
         self.resolution = 1
-        self.dirty = False
+        self.dirty = dirty_status
         self.active_tool = self.tools["paint"]
         self.active_tool.reset(self.sc.draw)
         self.continuous_painting = False
@@ -239,6 +271,17 @@ class Painter():
             self.pos -= (0, 1)
 
         self.active_tool.handle_key(key)
+
+    @property
+    def active_tool(self):
+        return self._active_tool
+
+    @active_tool.setter
+    def active_tool(self, value):
+        if getattr(self, "_active_tool", None):
+            self._active_tool.stop()
+        self._active_tool = value
+        value.start()
 
     async def quit(self, event=None):
         if self.dirty:
