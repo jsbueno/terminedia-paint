@@ -419,6 +419,10 @@ class Painter():
         if backend not in ("HTML", "SNAPSHOT"):
             backend = "ANSI"
         img.render(output=path, backend=backend)
+        if backend == "ANSI":
+            with open(path, "at") as txt_file:
+                txt_file.write("\n")
+
         self.dirty = False
 
     async def _message(self, text):
