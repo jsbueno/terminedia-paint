@@ -142,10 +142,10 @@ class PathTypeTool(SimplePaintTool):
         self.advance_cursores()
 
     def advance_cursores(self):
-        new_cursores = []
+        new_cursores = set()
         for i, cursor in enumerate(self.cursores or (self.parent.pos,)):
             if self.mode == "line":
-                new_cursores.append(cursor + self.direction)
+                new_cursores.add(cursor + self.direction)
             else:
                 # the two cursores sub-list strategy is to avoid duplicating the cursores in
                 # a stepped corner in a single line: that is, if there is at least one straight path,
@@ -158,9 +158,9 @@ class PathTypeTool(SimplePaintTool):
                     new_pos = cursor + delta
                     if self.shape[new_pos].value == TM.values.FULL_BLOCK:
                         (new_cursores_straight if 0 in delta else new_cursores_diag).append(new_pos)
-                new_cursores.extend(new_cursores_straight or new_cursores_diag)
+                new_cursores.update(new_cursores_straight or new_cursores_diag)
 
-        self.cursores = new_cursores
+        self.cursores = list(new_cursores)
 
     def backspace(self):
         if not self.rendered:
