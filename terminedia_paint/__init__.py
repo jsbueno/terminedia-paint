@@ -30,15 +30,16 @@ class CancelledException(Exception):
 
 class SimplePaintTool:
     erase = False
-    def __init__(self, drawable_cmds):
-        self.reset(drawable_cmds)
+    def __init__(self, parent, shape):
+        self.parent = parent
+        self.shape = shape
+        self.reset(shape.draw)
 
     def reset(self, drawable_cmds):
         self.draw = drawable_cmds
         self.last_set = None
 
     def toggle_point(self, pos):
-        open("bla11.txt", "at").write(repr(self.draw.get(pos)) + "\n")
         value = self.draw.get(pos)
         if isinstance(value, TM.Color):
             value = value == self.draw.context.foreground
@@ -60,15 +61,74 @@ class SimplePaintTool:
         else:
             self.draw.reset(pos)
 
-class PathTypeTool:
-    """allows free typing following a previous drawn path on the screen"""
-    # TBD
-    def __init__(self, drawable_cmds):
-        self.reset(drawable_cmds)
+    def handle_key(self, key):
+
+        if key == " ":
+            self.last_set = None
+            self.toggle_point(self.parent.pos)
+            self.last_set = self.parent.pos
+            self.parent.dirty = True
+        if key == "v":
+            if getattr(self.active_tool, "one_to_last_click", False):
+                self.last_set = self.one_to_last_click
+                self.one_to_last_click = None
+            self.set_point(self.parent.pos, interpolate=True)
+            self.last_set = self.parent.pos
+            self.parent.dirty = True
+        if key == "x":
+            self.parent.continuous_painting = ~self.parent.continuous_painting
+            self.last_set = self.parent.pos if not self.parent.continuous_painting else None
+
+        if self.parent.previous_pos != self.parent.pos and self.parent.continuous_painting:
+            self.set_point(self.parent.previous_pos)
+            self.last_set = self.parent.pos
+            self.parent.dirty = True
 
 
 class SimpleEraseTool(SimplePaintTool):
     erase = True
+
+
+class PathTypeTool(SimplePaintTool):
+    """allows free typing following a previous drawn path on the screen"""
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.cursores = []
+        self.text_plane = 1
+        self.direction = TM.Directions.RIGHT
+        self.tick = 0
+        self.last_direction_change = -2
+
+
+    def handle_key(self, key):
+        self.tick += 1
+        if self.parent.pos != self.parent.previous_pos:
+            if len(self.cursores) == 1:
+                self.cursores[0] = self.cursores[0] - self.direction
+            if self.tick - self.last_direction_change > 1:
+                self.direction = self.parent.pos - self.parent.previous_pos
+            self.last_direction_change = self.tick
+            self.advance_cursores()
+            return
+        if key == TM.keyboard.keycodes.ESC:
+            self.parent.state_reset(pos=self.parent.pos)
+
+
+        if key in TM.keyboard.keycodes.codes:
+            return
+        for cursor in self.cursores or (self.parent.pos,):
+            self.shape.text[self.text_plane][cursor] = key
+        self.advance_cursores()
+
+    def advance_cursores(self):
+        new_cursores = []
+        for i, cursor in enumerate(self.cursores or (self.parent.pos,)):
+            new_cursores.append(cursor + self.direction)
+        self.cursores = new_cursores
+
+    def toggle_point(self, pos):
+        self.cursores = [pos,]
+
 
 
 resolutions = {
@@ -87,7 +147,6 @@ class Painter():
 
     def __init__(self):
         self.sc = TM.Screen()
-        self.sc.shape.undo_active = True
         self.pointer = TM.Sprite(TM.shape((1,1)))
         self.pointer.transformers.append(TM.Transformer(char=lambda char, tick: char if (tick // 8) %2 else TM.TRANSPARENT))
         self.sc.shape.sprites.add(self.pointer)
@@ -111,6 +170,7 @@ class Painter():
             "b": (self.pick_background, "Background Color"),
             "l": (self.pick_character, "Pick Char"),
             "i": (self.insert_image, "Paste Image"),
+            "t": (self.typing_tool, "Typing Tool"),
             "1": (lambda e=None: setattr(self, "resolution", 1), "Draw with full chars"),
             "2": (lambda e=None: setattr(self, "resolution", 2), "Draw with 1/2 blocks"),
             "4": (lambda e=None: setattr(self, "resolution", 4), "Draw with 1/4 blocks"),
@@ -127,12 +187,13 @@ class Painter():
         }
 
         self.tools = {
-            "paint": SimplePaintTool(self.sc.shape.draw),
-            "erase": SimpleEraseTool(self.sc.shape.draw)
+            "paint": SimplePaintTool(self, self.sc.shape),
+            "erase": SimpleEraseTool(self, self.sc.shape),
+            "typing": PathTypeTool(self, self.sc.shape),
         }
         self.menu = TM.widgets.ScreenMenu(self.sc, self.global_shortcuts, columns=3, focus_position=None)
 
-    def state_reset(self):
+    def state_reset(self, pos=None):
         self.resolution = 1
         self.dirty = False
         self.active_tool = self.tools["paint"]
@@ -140,10 +201,10 @@ class Painter():
         self.continuous_painting = False
         # self.help_active = False
         if getattr(self, "menu", None):
-            self.menu.sprite.active = True
+            self.menu.enabled = True
         self.drag_drawing = False
         self.resolution = 1
-        self.pos = V2(0,0)
+        self.pos = pos or V2(0,0)
         self.last_painting_move = (-1, -1)
 
 
@@ -163,7 +224,7 @@ class Painter():
         width = 1
         if self.resolution == 1 and isinstance(self.sc.context.char, TM.unicode.Character) and self.sc.context.char.width=="W":
             width = 2
-        previous_pos = self.pos
+        self.previous_pos = self.pos
         if key == KeyCodes.RIGHT and \
                 self.pos.x < self.drawable.size.x:
             self.pos += (width, 0)
@@ -176,27 +237,8 @@ class Painter():
         elif key == KeyCodes.UP and \
                 self.pos.y > 0:
             self.pos -= (0, 1)
-        if key == " ":
-            self.active_tool.last_set = None
-            self.active_tool.toggle_point(self.pos)
-            self.active_tool.last_set = self.pos
-            self.dirty = True
-        if key == "v":
-            if getattr(self.active_tool, "one_to_last_click", False):
-                self.active_tool.last_set = self.active_tool.one_to_last_click
-                self.active_tool.one_to_last_click = None
-            self.active_tool.set_point(self.pos, interpolate=True)
-            self.active_tool.last_set = self.pos
-            self.dirty = True
-        if key == "x":
-            self.continuous_painting = ~self.continuous_painting
-            self.active_tool.last_set = self.pos if not self.continuous_painting else None
 
-        if previous_pos != self.pos and self.continuous_painting:
-            self.active_tool.set_point(previous_pos)
-            #self.active_tool.set_point(self.pos)
-            self.active_tool.last_set = self.pos
-            self.dirty = True
+        self.active_tool.handle_key(key)
 
     async def quit(self, event=None):
         if self.dirty:
@@ -483,6 +525,14 @@ class Painter():
         self.tools["erase"].reset(drawable.draw)
         self.__dict__["resolution"] = value
         self.pointer.shape[0,0] = EMPTY if value != 1 else POINTER_CHAR
+
+    async def typing_tool(self):
+        self.resolution = 1
+        self.menu.enabled = False  # typing tool restores the menu on being exited via <ESC> press.
+        self.active_tool = self.tools["typing"]
+        asyncio.create_task(
+            self._message("Entering typing tool: press <ESC> to exit!")
+        )
 
 
 def run():
