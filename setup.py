@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 setup(
     name="terminedia_paint",
     packages=find_packages(),
-    version="0.1.0.dev0",
+    version="0.1.0",
     license="LGPLv3+",
     author="João S. O. Bueno",
     author_email="gwidion@gmail.com",
@@ -21,7 +21,7 @@ setup(
     zip_safe=True,
     test_requires=[],
     install_requires=[
-        "terminedia @ git+https://github.com/jsbueno/terminedia.git",  # temporarily pointing to main
+        "terminedia>=0.4.2",
         "pillow>=6.0.0"
     ],
     extras_require={
@@ -36,6 +36,7 @@ setup(
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: System Administrators",
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
