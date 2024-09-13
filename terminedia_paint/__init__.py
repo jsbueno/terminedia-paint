@@ -18,6 +18,8 @@ from terminedia.transformers.library import box_transformers
 from terminedia.values import EMPTY
 from terminedia.widgets import WidgetCancelled
 
+__version__ = "0.1.1"
+
 """
 Early version of paint-app for the terminal, using Terminedia.
 

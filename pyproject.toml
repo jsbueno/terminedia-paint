@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terminedia_paint"
+dynamic = ["version"]
+license = {text = "LGPLv3+"}
+authors = [{name = "João S. O. Bueno", email = "gwidion@gmail.com"}]
+keywords = ["terminal", "cmd", "posix", "xterm", "ANSI", "color", "ASCIIart", "unicode", "drawing", "art"]
+classifiers = [
+   "Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: System Administrators",
+   "Programming Language :: Python :: 3.8",
+   "Programming Language :: Python :: 3.9",
+   "Programming Language :: Python :: 3.10",
+   "Programming Language :: Python :: 3.11",
+   "Programming Language :: Python :: 3.12",
+   "Programming Language :: Python :: 3.13",
+   "Programming Language :: Python :: Implementation :: PyPy",
+   "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+   "Operating System :: OS Independent", 
+   "Topic :: Artistic Software", 
+   "Topic :: Multimedia :: Graphics",
+   "Topic :: Terminals", 
+   "Topic :: Terminals :: Terminal Emulators/X Terminals"
+]
+description = "Application to draw ASCIIart images interactively on the posix terminal"
+readme = {file = "README.md", content-type = "text/markdown"}
+dependencies = ["pillow>=6.0.0", "terminedia>=0.4.2"]
+
+[project.urls]
+"Source Code" = "https://github.com/jsbueno/terminedia-paint"
+
+[project.optional-dependencies]
+images = ["pillow>=6.0.0"]
+tests = ["pytest"]
+
+[project.scripts]
+terminedia-paint = "terminedia_paint:run"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["terminedia_paint"]
+
+[tool.setuptools.dynamic]
+version = {attr = "terminedia_paint.__version__"}
